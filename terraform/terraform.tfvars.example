@@ -1,0 +1,68 @@
+# Copier ce fichier en terraform.tfvars et renseigner les valeurs.
+# Ne jamais committer terraform.tfvars dans git.
+
+github_org   = "Ch0wseth"
+github_token = "ghp_xxxxxxxxxxxxxxxxxxxx"
+
+# ─── Équipes ──────────────────────────────────────────────────────────────────
+teams = {
+  "developers" = {
+    description = "Équipe développeurs"
+    privacy     = "closed"
+    parent_team = null
+  }
+  "platform" = {
+    description = "Équipe platform engineering"
+    privacy     = "closed"
+    parent_team = null
+  }
+  "platform-frontend" = {
+    description = "Sous-équipe frontend"
+    privacy     = "closed"
+    parent_team = "platform"
+  }
+}
+
+# ─── Membres ──────────────────────────────────────────────────────────────────
+org_members = {
+  "alice"   = "member"
+  "bob"     = "member"
+  "charlie" = "admin"
+}
+
+team_memberships = {
+  "alice" = { team = "developers", role = "member" }
+  "bob"   = { team = "platform", role = "maintainer" }
+}
+
+# ─── Repos ────────────────────────────────────────────────────────────────────
+repositories = {
+  "GitHub_IaC" = {
+    description    = "Infrastructure as Code pour GitHub"
+    visibility     = "private"
+    default_branch = "main"
+    branch_protections = [
+      {
+        pattern                = "main"
+        enforce_admins         = true
+        require_signed_commits = false
+        required_approvals     = 1
+      }
+    ]
+  }
+}
+
+# ─── Actions Variables ────────────────────────────────────────────────────────
+org_variables = {
+  "GITHUB_ORG" = {
+    value      = "Ch0wseth"
+    visibility = "all"
+  }
+}
+
+# ─── Actions Secrets ──────────────────────────────────────────────────────────
+# Valeurs doivent être chiffrées (SOPS, Vault, etc.) — jamais en clair
+org_secrets = {}
+
+# ─── Webhooks ─────────────────────────────────────────────────────────────────
+org_webhooks = {}

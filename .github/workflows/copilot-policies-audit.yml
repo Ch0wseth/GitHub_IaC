@@ -1,0 +1,62 @@
+name: "Copilot Policies — Audit"
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # Tous les lundis à 8h
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: "Lire les policies Copilot"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Copilot policies
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ADMIN_TOKEN }}
+          GITHUB_ORG: ${{ vars.GITHUB_ORG }}
+        run: |
+          echo "==> Policies Copilot pour l'org $GITHUB_ORG"
+
+          HTTP_STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "https://api.github.com/orgs/$GITHUB_ORG/copilot/billing")
+
+          echo "HTTP $HTTP_STATUS"
+
+          if [[ "$HTTP_STATUS" != "200" ]]; then
+            echo "Erreur HTTP $HTTP_STATUS"
+            cat /tmp/response.json
+            exit 1
+          fi
+
+          cat /tmp/response.json | jq .
+
+          # Extraire les champs utiles
+          SEAT_SETTING=$(jq -r '.seat_management_setting' /tmp/response.json)
+          IDE_CHAT=$(jq -r '.ide_chat' /tmp/response.json)
+          PLATFORM_CHAT=$(jq -r '.platform_chat' /tmp/response.json)
+          CLI=$(jq -r '.cli' /tmp/response.json)
+          PUBLIC_CODE=$(jq -r '.public_code_suggestions' /tmp/response.json)
+          PLAN=$(jq -r '.plan_type' /tmp/response.json)
+          TOTAL_SEATS=$(jq -r '.seat_breakdown.total' /tmp/response.json)
+          ACTIVE_SEATS=$(jq -r '.seat_breakdown.active_this_cycle' /tmp/response.json)
+
+          echo "### Copilot Policies — $GITHUB_ORG" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Paramètre | Valeur |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Plan | \`$PLAN\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Seat management | \`$SEAT_SETTING\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sièges totaux | $TOTAL_SEATS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sièges actifs | $ACTIVE_SEATS |" >> $GITHUB_STEP_SUMMARY
+          echo "| IDE Chat | \`$IDE_CHAT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform Chat | \`$PLATFORM_CHAT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI | \`$CLI\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code public | \`$PUBLIC_CODE\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> Généré le $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY

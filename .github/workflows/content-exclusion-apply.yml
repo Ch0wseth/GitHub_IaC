@@ -1,0 +1,85 @@
+name: "Content Exclusion — Get & Set"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "content-exclusion/config.json"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action à effectuer"
+        type: choice
+        options:
+          - set
+          - get
+        default: set
+
+permissions:
+  contents: read
+
+jobs:
+  get:
+    name: "Get — règles actuelles"
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'get' }}
+    steps:
+      - name: Get current content exclusion rules
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ADMIN_TOKEN }}
+          GITHUB_ORG: ${{ vars.GITHUB_ORG }}
+        run: |
+          echo "==> Règles actuelles dans l'org $GITHUB_ORG"
+
+          HTTP_STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "https://api.github.com/orgs/$GITHUB_ORG/copilot/content_exclusion")
+
+          echo "HTTP $HTTP_STATUS"
+          cat /tmp/response.json | jq .
+
+          if [[ "$HTTP_STATUS" != "200" ]]; then
+            echo "Erreur HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "### Règles de content exclusion actuelles" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/response.json | jq . >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  set:
+    name: "Set — appliquer config.json"
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'set') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON
+        run: jq empty content-exclusion/config.json
+
+      - name: Apply via GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ADMIN_TOKEN }}
+          GITHUB_ORG: ${{ vars.GITHUB_ORG }}
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "https://api.github.com/orgs/$GITHUB_ORG/copilot/content_exclusion" \
+            --data-binary @content-exclusion/config.json)
+
+          cat /tmp/response.json
+
+          if [[ "$HTTP_STATUS" != "200" && "$HTTP_STATUS" != "204" ]]; then
+            echo "Erreur HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Content exclusion appliqué avec succès (HTTP $HTTP_STATUS)."
